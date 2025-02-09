@@ -16,7 +16,7 @@ const execPromise = promisify(exec);
 
 export const dynamic = 'force-dynamic'; // This is important for webhook endpoints
 export const runtime = 'nodejs';
-export const maxDuration = 300; // Set max duration to 5 minutes for voice processing
+export const maxDuration = 60; // Set max duration to 60 seconds (Vercel hobby plan limit)
 
 const llm = new ChatGroq({
   apiKey: process.env.GROQ_API_KEY,
