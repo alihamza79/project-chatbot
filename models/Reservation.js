@@ -64,4 +64,7 @@ const ReservationSchema = new mongoose.Schema({
   }],
 }, {
   timestamps: true,
-}); 
+});
+
+const Reservation = mongoose.models.Reservation || mongoose.model('Reservation', ReservationSchema);
+export default Reservation; 
