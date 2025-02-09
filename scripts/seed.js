@@ -9,9 +9,10 @@ if (!uri) {
 }
 
 async function seedDatabase() {
+  let client;
   try {
-    const client = await MongoClient.connect(uri);
-    const db = client.db();
+    client = await MongoClient.connect(uri);
+    const db = client.db('hotel-chatbot');
 
     // Clear existing data
     await db.collection('rooms').deleteMany({});
@@ -60,6 +61,8 @@ async function seedDatabase() {
         }
       }
     ]);
+
+    console.log('Rooms seeded successfully');
 
     // Create sample services
     const services = await db.collection('services').insertMany([
@@ -197,6 +200,8 @@ async function seedDatabase() {
       }
     ]);
 
+    console.log('Services seeded successfully');
+
     // Create sample reservations with more details
     const reservations = await db.collection('reservations').insertMany([
       {
@@ -282,10 +287,13 @@ async function seedDatabase() {
     ]);
 
     console.log('Database seeded successfully!');
-    await client.close();
   } catch (error) {
     console.error('Error seeding database:', error);
     process.exit(1);
+  } finally {
+    if (client) {
+      await client.close();
+    }
   }
 }
 

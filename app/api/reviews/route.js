@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import connectDB from '../../../lib/mongodb';
-import { Review, Reservation } from '../../../models';
+import { connectDB } from '../../../lib/mongodb';
+
+export const dynamic = 'force-dynamic';
 
 // GET all reviews with filtering
 export async function GET(request) {
   try {
-    await connectDB();
+    const { db } = await connectDB();
     
     // Get query parameters
     const { searchParams } = new URL(request.url);
@@ -19,20 +20,46 @@ export async function GET(request) {
     if (isVerified !== null) query.isVerified = isVerified === 'true';
     if (guestEmail) query['guest.email'] = guestEmail;
 
-    const reviews = await Review.find(query)
-      .populate({
-        path: 'reservation',
-        populate: {
-          path: 'room',
-          model: 'Room'
+    console.log('Executing MongoDB query:', query);
+
+    // Use MongoDB aggregation to get reviews with reservation and room details
+    const reviews = await db.collection('reviews').aggregate([
+      { $match: query },
+      {
+        $lookup: {
+          from: 'reservations',
+          localField: 'reservation',
+          foreignField: '_id',
+          as: 'reservation'
         }
-      });
+      },
+      {
+        $unwind: '$reservation'
+      },
+      {
+        $lookup: {
+          from: 'rooms',
+          localField: 'reservation.room',
+          foreignField: '_id',
+          as: 'room'
+        }
+      },
+      {
+        $unwind: '$room'
+      }
+    ]).toArray();
+
+    console.log('Found reviews:', reviews);
+
+    if (!reviews || reviews.length === 0) {
+      return NextResponse.json([]);
+    }
 
     return NextResponse.json(reviews);
   } catch (error) {
     console.error('Error fetching reviews:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: 'Internal Server Error', details: error.message },
       { status: 500 }
     );
   }
@@ -41,28 +68,28 @@ export async function GET(request) {
 // POST create new review
 export async function POST(request) {
   try {
-    await connectDB();
+    const { db } = await connectDB();
     
     const body = await request.json();
 
-    // Verify reservation exists and belongs to the guest
-    const reservation = await Reservation.findById(body.reservation);
+    // Verify reservation exists
+    const reservation = await db.collection('reservations').findOne({ 
+      _id: body.reservation,
+      'guest.email': body.guest.email 
+    });
+
     if (!reservation) {
       return NextResponse.json(
-        { error: 'Reservation not found' },
+        { error: 'Reservation not found or does not belong to this guest' },
         { status: 404 }
       );
     }
 
-    if (reservation.guest.email !== body.guest.email) {
-      return NextResponse.json(
-        { error: 'Review can only be created by the guest who made the reservation' },
-        { status: 403 }
-      );
-    }
+    // Check if review already exists
+    const existingReview = await db.collection('reviews').findOne({ 
+      reservation: body.reservation 
+    });
 
-    // Check if review already exists for this reservation
-    const existingReview = await Review.findOne({ reservation: body.reservation });
     if (existingReview) {
       return NextResponse.json(
         { error: 'Review already exists for this reservation' },
@@ -70,13 +97,22 @@ export async function POST(request) {
       );
     }
 
-    const review = await Review.create(body);
+    // Add timestamps and initial verification status
+    const reviewData = {
+      ...body,
+      isVerified: false,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    const result = await db.collection('reviews').insertOne(reviewData);
+    const newReview = await db.collection('reviews').findOne({ _id: result.insertedId });
     
-    return NextResponse.json(review, { status: 201 });
+    return NextResponse.json(newReview, { status: 201 });
   } catch (error) {
     console.error('Error creating review:', error);
     return NextResponse.json(
-      { error: 'Internal Server Error' },
+      { error: 'Internal Server Error', details: error.message },
       { status: 500 }
     );
   }
