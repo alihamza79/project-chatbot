@@ -1,36 +1,84 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Hotel WhatsApp Chatbot
 
-## Getting Started
+A Next.js-based WhatsApp chatbot for hotel reservations with Stripe payment integration.
 
-First, run the development server:
+## Features
 
+- WhatsApp integration using Twilio
+- Hotel reservation management
+- Stripe payment processing
+- MongoDB Atlas database integration
+- LangChain for natural language processing
+
+## Prerequisites
+
+- Node.js 16+ and npm
+- MongoDB Atlas account
+- Twilio account with WhatsApp integration
+- OpenAI API key
+- Stripe account
+
+## Setup
+
+1. Clone the repository:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone <repository-url>
+cd project-chatbot
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Install dependencies:
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+3. Create a `.env` file based on `.env.example` and fill in your credentials:
+```bash
+cp .env.example .env
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+4. Configure your environment variables in the `.env` file:
+- Set up MongoDB Atlas and add your connection string
+- Add your Twilio credentials
+- Configure your Stripe API keys
+- Add your OpenAI API key
 
-## Learn More
+5. Run the development server:
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Webhook Setup
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Deploy your application or use a tunnel service like ngrok for local development
+2. Set up your Twilio WhatsApp webhook URL to point to:
+   `https://your-domain/api/webhook`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Usage
 
-## Deploy on Vercel
+The chatbot supports the following commands:
+- "Book" or "reservation" - Start the booking process
+- Booking format: "Book: [name], [email], [check-in], [check-out], [room-type], [guests]"
+  Example: "Book: John Doe, john@example.com, 2024-04-01, 2024-04-03, double, 2"
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Room Types and Pricing
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Single Room: $100/night
+- Double Room: $200/night
+- Suite: $300/night
+
+## Development
+
+The project structure:
+- `/src/app/api/webhook` - WhatsApp webhook handler
+- `/src/models` - MongoDB schemas
+- `/src/lib` - Utility functions
+
+## Security
+
+- All sensitive information is stored in environment variables
+- Stripe handles payment information securely
+- MongoDB Atlas provides database security
+
+## License
+
+MIT
