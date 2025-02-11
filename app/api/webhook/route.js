@@ -58,9 +58,7 @@ async function transcribeVoiceMessage(audioUrl) {
   console.log('Audio URL:', audioUrl);
   
   const startTime = Date.now();
-  // Create temporary file paths for OGG and WAV files
-  const tempOggPath = join(tmpdir(), `audio_${Date.now()}.ogg`);
-  const tempWavPath = join(tmpdir(), `audio_${Date.now()}.wav`);
+  const tempFilePath = join(tmpdir(), `audio_${Date.now()}.ogg`);
   
   try {
     // Fetch audio with authentication
@@ -76,69 +74,52 @@ async function transcribeVoiceMessage(audioUrl) {
       throw new Error(`Failed to fetch audio: ${response.status} ${response.statusText}`);
     }
 
-    // Get audio data as ArrayBuffer and save it as an OGG file
+    // Get audio data and save it
     const audioBuffer = await response.arrayBuffer();
-    await writeFile(tempOggPath, Buffer.from(audioBuffer));
-    console.log(`💾 Saved OGG file: ${tempOggPath}`);
-    
-    // Convert OGG file to WAV using ffmpeg
-    console.log('🔄 Converting OGG to WAV using ffmpeg...');
-    const ffmpegCmd = `ffmpeg -y -i "${tempOggPath}" -ac 1 -ar 16000 "${tempWavPath}"`;
-    await execPromise(ffmpegCmd);
-    console.log(`✅ Conversion completed. WAV file: ${tempWavPath}`);
-    
-    // Read WAV file buffer
-    const wavBuffer = await readFile(tempWavPath);
-    
-    // Parse WAV header (assume 44 bytes) and extract PCM data
-    const pcmData = wavBuffer.slice(44);
-    const sampleCount = pcmData.length / 2;
-    const audioData = new Float32Array(sampleCount);
-    for (let i = 0; i < sampleCount; i++) {
-      const sample = pcmData.readInt16LE(i * 2);
-      audioData[i] = sample / 32768.0; // Normalize to range [-1, 1]
-    }
-    
-    // Get Whisper pipeline
-    console.log('🤖 Getting Whisper pipeline...');
-    const whisper = await getWhisperPipeline();
-    
-    // Transcribe using the raw PCM data
-    console.log('🎯 Starting transcription...');
-    const result = await whisper(audioData, {
-      sampling_rate: 16000,
-      task: 'transcribe',
-      language: 'en'
+    await writeFile(tempFilePath, Buffer.from(audioBuffer));
+    console.log(`💾 Saved audio file: ${tempFilePath}`);
+
+    // Create FormData and append the audio file
+    const formData = new FormData();
+    formData.append('file', new Blob([audioBuffer], { type: 'audio/ogg' }), 'audio.ogg');
+    formData.append('model', 'whisper-large-v3');
+    formData.append('response_format', 'text');
+
+    // Use Groq's whisper-large-v3 model for transcription
+    console.log('🤖 Starting transcription with Groq...');
+    const groqResponse = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+      },
+      body: formData
     });
-    
-    if (!result?.text) {
-      throw new Error('No transcription output received');
+
+    if (!groqResponse.ok) {
+      const errorText = await groqResponse.text();
+      throw new Error(`Groq API error: ${groqResponse.status} ${groqResponse.statusText}\n${errorText}`);
     }
+
+    const transcript = await groqResponse.text();
     
     const transcriptionTime = ((Date.now() - startTime) / 1000).toFixed(2);
     console.log('\n✨ Transcription Results ✨');
     console.log('Time taken:', transcriptionTime, 'seconds');
-    console.log('Transcript:', result.text);
+    console.log('Transcript:', transcript);
     
-    return result.text;
+    return transcript;
   } catch (error) {
     console.error('\n❌ Transcription Error ❌');
     console.error('Error:', error.message);
     console.error('Stack:', error.stack);
     throw error;
   } finally {
-    // Cleanup temporary files
+    // Cleanup temporary file
     try {
-      await unlink(tempOggPath);
-      console.log(`🧹 Deleted temporary OGG file: ${tempOggPath}`);
+      await unlink(tempFilePath);
+      console.log(`🧹 Deleted temporary file: ${tempFilePath}`);
     } catch (e) {
-      console.error('⚠️ Error deleting OGG file:', e);
-    }
-    try {
-      await unlink(tempWavPath);
-      console.log(`🧹 Deleted temporary WAV file: ${tempWavPath}`);
-    } catch (e) {
-      console.error('⚠️ Error deleting WAV file:', e);
+      console.error('⚠️ Error deleting temporary file:', e);
     }
   }
 }
@@ -515,7 +496,7 @@ export async function POST(req) {
       } catch (error) {
         console.error('❌ Voice transcription error:', error);
         const twiml = new twilio.twiml.MessagingResponse();
-        twiml.message("I'm sorry, I couldn't understand the voice message. Could you please try again or send your request as text?");
+        twiml.message("I apologize, but I couldn't process the voice message at the moment. Could you please try again or send your request as text?");
         return new NextResponse(twiml.toString(), {
           status: 200,
           headers: { 'Content-Type': 'text/xml' }
@@ -585,8 +566,9 @@ export async function POST(req) {
     });
   } catch (error) {
     console.error('Error processing webhook:', error);
+    // Always return a valid TwiML response, even in case of errors
     const twiml = new twilio.twiml.MessagingResponse();
-    twiml.message('Sorry, there was an error processing your request. Please try again.');
+    twiml.message('I apologize, but I encountered an error processing your request. Please try again in a moment.');
     
     return new NextResponse(twiml.toString(), {
       status: 200,
